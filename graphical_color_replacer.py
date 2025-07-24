@@ -42,25 +42,18 @@ class ColorEditorApp:
         self.found_colors = sorted(list(found_hex | found_names), key=str.lower)
 
         self.master.title(f"Color Editor - {self.file_path.name}")
-        self.master.geometry("400x600")
+        self.master.geometry("550x600") # Made window a bit wider for the grid
 
         self._create_widgets()
 
     def _create_widgets(self):
         """Create and layout the GUI elements with a robust scrollbar."""
-        # --- WIDGET CREATION ---
-
-        # 1. Create the bottom button first, but don't pack it yet.
         save_button = tk.Button(self.master, text="Save Changes and Exit", command=self._save_and_exit, height=2)
-
-        # 2. Create the main frame that will hold the scrollable area.
         main_frame = tk.Frame(self.master)
-
         canvas = tk.Canvas(main_frame)
         scrollbar = tk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
-        self.scrollable_frame = tk.Frame(canvas) # The frame that will hold the color list
+        self.scrollable_frame = tk.Frame(canvas)
 
-        # 3. Configure the canvas and scrollbar to work together.
         self.scrollable_frame.bind(
             "<Configure>",
             lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
@@ -68,47 +61,49 @@ class ColorEditorApp:
         canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
 
-        # --- LAYOUT (PACKING) ---
-
-        # 4. Pack the Save button to the BOTTOM of the window first.
         save_button.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=10)
-
-        # 5. Pack the main_frame to fill all REMAINING space.
         main_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10, pady=5)
-
-        # 6. Pack the canvas and scrollbar inside the main_frame.
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
 
-        # --- POPULATE CONTENT ---
-        self._populate_colors()
+        self._populate_colors_grid() # Call the new grid layout method
 
-    def _populate_colors(self):
-        """Adds the color rows to the scrollable frame."""
+    def _populate_colors_grid(self):
+        """Places the color swatches in a dynamically sized grid."""
         if not self.found_colors:
              tk.Label(self.scrollable_frame, text="No valid HTML colors found.", pady=20).pack()
-        else:
-            header_font = font.Font(family="Helvetica", size=12, weight="bold")
-            tk.Label(self.scrollable_frame, text="Click a color to change it:", font=header_font, pady=10).pack()
+             return
 
-            for original_color in self.found_colors:
-                self._create_color_row(self.scrollable_frame, original_color)
+        num_colors = len(self.found_colors)
+        # Calculate the number of columns to make the grid roughly square
+        num_cols = max(1, int(num_colors**0.5) + 1)
 
-    def _create_color_row(self, parent, original_color):
-        """Creates a single row for a color swatch and its label."""
-        row_frame = tk.Frame(parent)
-        row_frame.pack(fill=tk.X, pady=2)
+        for i, original_color in enumerate(self.found_colors):
+            row, col = divmod(i, num_cols)
+            self._create_color_cell(self.scrollable_frame, original_color, row, col)
+
+        # Configure columns to have equal weight, allowing them to resize
+        for i in range(num_cols):
+            self.scrollable_frame.grid_columnconfigure(i, weight=1)
+
+    def _create_color_cell(self, parent, original_color, row, col):
+        """Creates a single cell for a color swatch and its label."""
+        cell_frame = tk.Frame(parent, relief="ridge", borderwidth=1)
+        # Place the cell in the grid
+        cell_frame.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
 
         initial_hex = color_to_hex(original_color)
 
-        swatch = tk.Label(row_frame, text="    ", bg=initial_hex, relief="ridge", borderwidth=2)
-        swatch.pack(side=tk.LEFT, padx=5)
+        # A larger swatch for the grid layout
+        swatch = tk.Label(cell_frame, text="", bg=initial_hex, height=3, width=6)
+        swatch.pack(pady=(5,0), padx=5)
 
-        text_label = tk.Label(row_frame, text=original_color, anchor="w")
-        text_label.pack(side=tk.LEFT, expand=True, fill=tk.X)
+        text_label = tk.Label(cell_frame, text=original_color)
+        text_label.pack(pady=(0,5), padx=5)
 
+        # Bind clicks to the whole cell
         click_handler = lambda e, oc=original_color, s=swatch, t=text_label: self._on_swatch_click(oc, s, t)
-        row_frame.bind("<Button-1>", click_handler)
+        cell_frame.bind("<Button-1>", click_handler)
         swatch.bind("<Button-1>", click_handler)
         text_label.bind("<Button-1>", click_handler)
 
@@ -121,7 +116,7 @@ class ColorEditorApp:
             new_hex = new_color_tuple[1]
             self.replacements[original_color] = new_hex
             swatch_widget.config(bg=new_hex)
-            text_widget.config(text=f"{original_color}  ->  {new_hex}")
+            text_widget.config(text=f"{new_hex}") # Update text to new color for clarity
 
     def _save_and_exit(self):
         """Applies the replacements and saves the new file."""
